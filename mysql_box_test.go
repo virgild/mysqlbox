@@ -2,10 +2,30 @@ package mysqlbox
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"testing"
 	"time"
 )
+
+func ExampleStart() {
+	// Start the MySQL server container
+	b, err := Start(&Config{})
+	if err != nil {
+		log.Printf("MySQLBox failed to start: %s\n", err.Error())
+		return
+	}
+
+	// Query the database
+	_, err = b.DB().Query("SELECT * FROM users LIMIT 5")
+	if err != nil {
+		log.Printf("select failed: %s\n", err.Error())
+		return
+	}
+
+	// Stop the container
+	b.Stop()
+}
 
 func TestPanicRecoverCleanup(t *testing.T) {
 	b, err := Start(&Config{})
@@ -15,7 +35,7 @@ func TestPanicRecoverCleanup(t *testing.T) {
 
 	defer func() {
 		recover()
-		b.StopFunc()()
+		b.Stop()
 	}()
 
 	panic("panic!")
@@ -37,7 +57,7 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.StopFunc())
+		t.Cleanup(b.Stop)
 
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
 		now := time.Now()
@@ -68,7 +88,7 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.StopFunc())
+		t.Cleanup(b.Stop)
 
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
 		now := time.Now()
@@ -95,7 +115,7 @@ func TestCleanTables(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.StopFunc())
+		t.Cleanup(b.Stop)
 
 		// Insert rows
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
@@ -182,7 +202,7 @@ func TestCleanTables(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.StopFunc())
+		t.Cleanup(b.Stop)
 
 		// Insert rows
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"

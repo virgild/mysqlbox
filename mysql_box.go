@@ -22,17 +22,37 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// Config contains MySQLBox settings.
 type Config struct {
-	ContainerName      string
-	Image              string
-	Database           string
-	RootPassword       string
+	// ContainerName specifies the MySQL container name. If blank, it will be generated as "mysql-test-<random id>".
+	ContainerName string
+
+	// Image specifies what Docker image to use. If blank, it defaults to "mysql:8".
+	Image string
+
+	// Database specifies the name of the database to create. If blank, it defaults to "testing".
+	Database string
+
+	// RootPassword specifies the password of the MySQL root user. If blank, the password is set to empty unless
+	// RandomRootPassword is true.
+	RootPassword string
+
+	// RandomRootPassword sets the password of the MySQL root user to a random value.
 	RandomRootPassword bool
-	MySQLPort          int
-	InitialSchema      *InitialSchema
-	DoNotCleanTables   []string
+
+	// MySQLPort specifies which port the MySQL server port (3306) will be bound to in the container.
+	MySQLPort int
+
+	// InitialSchema specifies an SQL script stored in a file or a buffer that will be run against the Database
+	// when the MySQL server container is started.
+	InitialSchema *InitialSchema
+
+	// DoNotCleanTables specifies a list of MySQL tables in Database that will not be cleaned when CleanAllTables()
+	// is called.
+	DoNotCleanTables []string
 }
 
+// LoadDefaults initializes some blank attributes of Config to default values.
 func (c *Config) LoadDefaults() {
 	if c.Image == "" {
 		c.Image = "mysql:8"
@@ -60,6 +80,9 @@ type MySQLBox struct {
 	doNotCleanTables []string
 }
 
+// Start creates a Docker container that will run a MySQL server. The passed Config object contains settings
+// for the container, the MySQL service, and initial data. To stop the created container, call the function returned
+// by StopFunc.
 func Start(c *Config) (*MySQLBox, error) {
 	var envVars []string
 
@@ -242,12 +265,12 @@ func Start(c *Config) (*MySQLBox, error) {
 	return b, nil
 }
 
-// StopFunc returns a function that stops the MySQL container when called.
-func (b *MySQLBox) StopFunc() func() {
-	return b.stopFunc
+// Stop stops the MySQL container.
+func (b *MySQLBox) Stop() {
+	b.stopFunc()
 }
 
-// DBx returns an *sqlx.DB connected to the running MySQL server.
+// DBx returns an sqlx.DB connected to the running MySQL server.
 func (b *MySQLBox) DBx() *sqlx.DB {
 	return b.db
 }
@@ -257,14 +280,17 @@ func (b *MySQLBox) DB() *sql.DB {
 	return b.db.DB
 }
 
+// URL returns the MySQL database URL that can be used to connect tohe MySQL service.
 func (b *MySQLBox) URL() string {
 	return b.url
 }
 
+// ContainerName returns the name of the created container.
 func (b *MySQLBox) ContainerName() string {
 	return b.containerName
 }
 
+// CleanAllTables truncates all tables in the Database, except those provided in Config.DoNotCleanTables.
 func (b *MySQLBox) CleanAllTables() {
 	query := "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"
 	rows, err := b.db.Queryx(query, b.databaseName)
