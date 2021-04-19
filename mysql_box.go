@@ -3,12 +3,11 @@ package mysqlbox
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/oklog/ulid/v2"
 )
 
 type Config struct {
@@ -32,23 +30,7 @@ type Config struct {
 	RandomRootPassword bool
 	MySQLPort          int
 	InitialSchema      *InitialSchema
-}
-
-type InitialSchema struct {
-	buf    *bytes.Buffer
-	reader io.Reader
-}
-
-func InitialSchemaFromReader(reader io.Reader) *InitialSchema {
-	return &InitialSchema{
-		reader: reader,
-	}
-}
-
-func InitialSchemaFromBuffer(buf []byte) *InitialSchema {
-	return &InitialSchema{
-		buf: bytes.NewBuffer(buf),
-	}
+	DoNotCleanTables   []string
 }
 
 func (c *Config) LoadDefaults() {
@@ -67,13 +49,15 @@ func (c *Config) LoadDefaults() {
 
 type MySQLBox struct {
 	url           string
+	databaseName  string
 	db            *sqlx.DB
 	containerName string
 	stopFunc      func()
 	// logBuf is where the mysql logs are stored (these are logs coming from the library and are not the server logs)
 	logBuf *bytes.Buffer
 	// port is the assigned port to the container that maps to the mysqld port
-	port int
+	port             int
+	doNotCleanTables []string
 }
 
 func Start(c *Config) (*MySQLBox, error) {
@@ -245,23 +229,32 @@ func Start(c *Config) (*MySQLBox, error) {
 	}
 
 	b := &MySQLBox{
-		db:            db,
-		url:           url,
-		stopFunc:      stopFunc,
-		port:          port,
-		logBuf:        logbuf,
-		containerName: c.ContainerName,
+		db:               db,
+		url:              url,
+		stopFunc:         stopFunc,
+		port:             port,
+		logBuf:           logbuf,
+		containerName:    c.ContainerName,
+		databaseName:     c.Database,
+		doNotCleanTables: c.DoNotCleanTables,
 	}
 
 	return b, nil
 }
 
+// StopFunc returns a function that stops the MySQL container when called.
 func (b *MySQLBox) StopFunc() func() {
 	return b.stopFunc
 }
 
-func (b *MySQLBox) DB() *sqlx.DB {
+// DBx returns an *sqlx.DB connected to the running MySQL server.
+func (b *MySQLBox) DBx() *sqlx.DB {
 	return b.db
+}
+
+// DB returns an sql.DB connected to the running MySQL server.
+func (b *MySQLBox) DB() *sql.DB {
+	return b.db.DB
 }
 
 func (b *MySQLBox) URL() string {
@@ -272,32 +265,33 @@ func (b *MySQLBox) ContainerName() string {
 	return b.containerName
 }
 
-func (b *MySQLBox) CleanTables(table ...string) {
-	panic("not implemented")
-}
-
-type mysqlLogger struct {
-	buf *bytes.Buffer
-	lg  *log.Logger
-}
-
-func newMySQLLogger(buf *bytes.Buffer) *mysqlLogger {
-	lg := log.New(buf, "mysql: ", 0)
-	lg.SetOutput(buf)
-	ml := &mysqlLogger{
-		buf: buf,
-		lg:  lg,
+func (b *MySQLBox) CleanAllTables() {
+	query := "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"
+	rows, err := b.db.Queryx(query, b.databaseName)
+	if err != nil {
+		panic(err)
 	}
-	return ml
-}
 
-func (l *mysqlLogger) Print(args ...interface{}) {
-	l.lg.Print(args[0])
-}
+	excludedTables := map[string]bool{}
+	for _, table := range b.doNotCleanTables {
+		excludedTables[table] = true
+	}
 
-var entropy = ulid.Monotonic(rand.Reader, 0)
+	for rows.Next() {
+		var table string
+		err := rows.Scan(&table)
+		if err != nil {
+			panic(err)
+		}
 
-func randomID() string {
-	t := time.Now()
-	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
+		if excludedTables[table] {
+			continue
+		}
+
+		query := fmt.Sprintf("TRUNCATE TABLE `%s`", table)
+		_, err = b.db.Exec(query)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
