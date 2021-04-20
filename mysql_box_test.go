@@ -30,6 +30,36 @@ func ExampleStart() {
 	}
 }
 
+func TestMySQLBoxDefaultConfig(t *testing.T) {
+	b, err := Start(&Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		err := b.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	if b.DBx() == nil {
+		t.Error("DBx() returns nil")
+	}
+
+	if b.DB() == nil {
+		t.Error("DB() returns nil")
+	}
+
+	if b.URL() == "" {
+		t.Error("URL() returns blank string")
+	}
+
+	if b.ContainerName() == "" {
+		t.Error("ContainerName() returns blank string")
+	}
+}
+
 func TestPanicRecoverCleanup(t *testing.T) {
 	b, err := Start(&Config{})
 	if err != nil {
