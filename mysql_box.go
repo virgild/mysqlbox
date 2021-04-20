@@ -43,9 +43,9 @@ type Config struct {
 	// MySQLPort specifies which port the MySQL server port (3306) will be bound to in the container.
 	MySQLPort int
 
-	// InitialSchema specifies an SQL script stored in a file or a buffer that will be run against the Database
+	// InitialSQL specifies an SQL script stored in a file or a buffer that will be run against the Database
 	// when the MySQL server container is started.
-	InitialSchema *InitialSchema
+	InitialSQL *Data
 
 	// DoNotCleanTables specifies a list of MySQL tables in Database that will not be cleaned when CleanAllTables()
 	// is called.
@@ -99,7 +99,7 @@ func Start(c *Config) (*MySQLBox, error) {
 
 	// Initial schema - write to file so it can be passed to docker
 	var tmpf *os.File
-	if c.InitialSchema != nil && (c.InitialSchema.reader != nil || c.InitialSchema.buf != nil) {
+	if c.InitialSQL != nil && (c.InitialSQL.reader != nil || c.InitialSQL.buf != nil) {
 		var err error
 		tmpf, err = ioutil.TempFile(os.TempDir(), "schema-*.sql")
 		if err != nil {
@@ -112,10 +112,10 @@ func Start(c *Config) (*MySQLBox, error) {
 
 		var src io.Reader
 
-		if c.InitialSchema.reader != nil {
-			src = c.InitialSchema.reader
-		} else if c.InitialSchema.buf != nil {
-			src = c.InitialSchema.buf
+		if c.InitialSQL.reader != nil {
+			src = c.InitialSQL.reader
+		} else if c.InitialSQL.buf != nil {
+			src = c.InitialSQL.buf
 		}
 
 		_, err = io.Copy(tmpf, src)

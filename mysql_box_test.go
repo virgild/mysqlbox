@@ -65,7 +65,7 @@ func TestMySQLBoxDefaultConfig(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	t.Logf("now: %v", now)
+
 	if now.IsZero() {
 		t.Error("time is zero")
 	}
@@ -100,7 +100,7 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 		}()
 
 		b, err := Start(&Config{
-			InitialSchema: InitialSchemaFromReader(schemaFile),
+			InitialSQL: DataFromReader(schemaFile),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -136,7 +136,7 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 		`)
 
 		b, err := Start(&Config{
-			InitialSchema: InitialSchemaFromBuffer(sql),
+			InitialSQL: DataFromBuffer(sql),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -166,7 +166,7 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 		}()
 
 		b, err := Start(&Config{
-			InitialSchema: InitialSchemaFromReader(schemaFile),
+			InitialSQL: DataFromReader(schemaFile),
 		})
 		if err == nil {
 			t.Error("mysql box should not start")
@@ -189,7 +189,7 @@ func TestCleanTables(t *testing.T) {
 		}()
 
 		b, err := Start(&Config{
-			InitialSchema: InitialSchemaFromReader(schemaFile),
+			InitialSQL: DataFromReader(schemaFile),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -280,7 +280,7 @@ func TestCleanTables(t *testing.T) {
 		}()
 
 		b, err := Start(&Config{
-			InitialSchema:    InitialSchemaFromReader(schemaFile),
+			InitialSQL:       DataFromReader(schemaFile),
 			DoNotCleanTables: []string{"categories"},
 		})
 		if err != nil {
@@ -372,7 +372,7 @@ func TestCleanTables(t *testing.T) {
 		}()
 
 		b, err := Start(&Config{
-			InitialSchema:    InitialSchemaFromReader(schemaFile),
+			InitialSQL:       DataFromReader(schemaFile),
 			DoNotCleanTables: []string{"categories"},
 		})
 		if err != nil {
