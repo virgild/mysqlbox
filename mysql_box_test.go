@@ -38,7 +38,10 @@ func TestPanicRecoverCleanup(t *testing.T) {
 
 	defer func() {
 		recover()
-		b.Stop()
+		err := b.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	panic("panic!")
