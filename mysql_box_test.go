@@ -24,7 +24,10 @@ func ExampleStart() {
 	}
 
 	// Stop the container
-	b.Stop()
+	err = b.Stop()
+	if err != nil {
+		log.Printf("stop container failed: %s\n", err.Error())
+	}
 }
 
 func TestPanicRecoverCleanup(t *testing.T) {
@@ -57,7 +60,12 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.Stop)
+		t.Cleanup(func() {
+			err := b.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
 		now := time.Now()
@@ -88,13 +96,39 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.Stop)
+		t.Cleanup(func() {
+			err := b.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
 		now := time.Now()
 		_, err = b.DB().Exec(query, "U-TEST1", "user1@example.com", now, now)
 		if err != nil {
 			t.Error(err)
+		}
+	})
+
+	t.Run("with bad schema", func(t *testing.T) {
+		schemaFile, err := os.Open("../testdata/bad-schema.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			schemaFile.Close()
+		}()
+
+		b, err := Start(&Config{
+			InitialSchema: InitialSchemaFromReader(schemaFile),
+		})
+		if err == nil {
+			t.Error("mysql box should not start")
+		}
+
+		if b != nil {
+			t.Error("Start should not return a mysql box")
 		}
 	})
 }
@@ -115,7 +149,12 @@ func TestCleanTables(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.Stop)
+		t.Cleanup(func() {
+			err := b.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 
 		// Insert rows
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
@@ -202,7 +241,12 @@ func TestCleanTables(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(b.Stop)
+		t.Cleanup(func() {
+			err := b.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 
 		// Insert rows
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"

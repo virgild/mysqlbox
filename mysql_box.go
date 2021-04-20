@@ -72,7 +72,7 @@ type MySQLBox struct {
 	databaseName  string
 	db            *sqlx.DB
 	containerName string
-	stopFunc      func()
+	stopFunc      func() error
 	// logBuf is where the mysql logs are stored (these are logs coming from the library and are not the server logs)
 	logBuf *bytes.Buffer
 	// port is the assigned port to the container that maps to the mysqld port
@@ -194,13 +194,14 @@ func Start(c *Config) (*MySQLBox, error) {
 	}
 
 	// Create container stopper function
-	stopFunc := func() {
+	stopFunc := func() error {
 		timeout := time.Second * 60
 		err := cli.ContainerStop(context.Background(), created.ID, &timeout)
 		if err != nil {
-			fmt.Printf("stop container error: %s\n", err.Error())
-			return
+			return err
 		}
+
+		return nil
 	}
 
 	// Set mysql logger
@@ -266,8 +267,12 @@ func Start(c *Config) (*MySQLBox, error) {
 }
 
 // Stop stops the MySQL container.
-func (b *MySQLBox) Stop() {
-	b.stopFunc()
+func (b *MySQLBox) Stop() error {
+	if b.stopFunc == nil {
+		return errors.New("mysqlbox has no stop func")
+	}
+
+	return b.stopFunc()
 }
 
 // DBx returns an sqlx.DB connected to the running MySQL server.
