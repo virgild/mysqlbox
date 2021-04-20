@@ -58,6 +58,18 @@ func TestMySQLBoxDefaultConfig(t *testing.T) {
 	if b.ContainerName() == "" {
 		t.Error("ContainerName() returns blank string")
 	}
+
+	row := b.DB().QueryRow("SELECT NOW()")
+	var now time.Time
+	err = row.Scan(&now)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("now: %v", now)
+	if now.IsZero() {
+		t.Error("time is zero")
+	}
+
 }
 
 func TestPanicRecoverCleanup(t *testing.T) {
