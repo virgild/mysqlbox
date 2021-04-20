@@ -349,4 +349,96 @@ func TestCleanTables(t *testing.T) {
 			t.FailNow()
 		}
 	})
+
+	t.Run("specific tables", func(t *testing.T) {
+		schemaFile, err := os.Open("../testdata/schema.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			schemaFile.Close()
+		}()
+
+		b, err := Start(&Config{
+			InitialSchema:    InitialSchemaFromReader(schemaFile),
+			DoNotCleanTables: []string{"categories"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			err := b.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+
+		// Insert rows
+		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
+		stmt, err := b.DB().Prepare(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		now := time.Now()
+		for n := 0; n < 10; n++ {
+			_, err := stmt.Exec(fmt.Sprintf("U-TEST%d", n), fmt.Sprintf("user%d@example.com", n), now, now)
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
+		}
+
+		// Check inserted rows
+		var count uint
+		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+
+		if count != 10 {
+			t.Error("select count does not match")
+			t.FailNow()
+		}
+
+		// Check other rows from the initial schema
+		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+
+		if count != 5 {
+			t.Error("select count does not match")
+			t.FailNow()
+		}
+
+		// Clean tables
+		b.CleanTables("categories", "non_existent")
+
+		// Check users table
+		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+
+		if count != 10 {
+			t.Error("select count does not match")
+			t.FailNow()
+		}
+
+		// Check categories table
+		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+
+		if count != 0 {
+			t.Error("select count does not match")
+			t.FailNow()
+		}
+	})
 }

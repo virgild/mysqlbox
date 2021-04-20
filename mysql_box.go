@@ -302,6 +302,9 @@ func (b *MySQLBox) CleanAllTables() {
 	if err != nil {
 		panic(err)
 	}
+	defer func() {
+		rows.Close()
+	}()
 
 	excludedTables := map[string]bool{}
 	for _, table := range b.doNotCleanTables {
@@ -323,6 +326,17 @@ func (b *MySQLBox) CleanAllTables() {
 		_, err = b.db.Exec(query)
 		if err != nil {
 			panic(err)
+		}
+	}
+}
+
+// CleanTables truncates the specified tables in the Database.
+func (b*MySQLBox) CleanTables(tables ...string) {
+	for _, table := range tables {
+		query := fmt.Sprintf("TRUNCATE TABLE `%s`", table)
+		_, err := b.db.Exec(query)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "truncate table failed (%s): %s\n", table, err.Error())
 		}
 	}
 }
