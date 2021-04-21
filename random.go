@@ -1,15 +1,9 @@
 package mysqlbox
 
 import (
-	"crypto/rand"
-	"time"
-
-	"github.com/oklog/ulid/v2"
+	"github.com/docker/docker/pkg/namesgenerator"
 )
 
-var entropy = ulid.Monotonic(rand.Reader, 0)
-
 func randomID() string {
-	t := time.Now()
-	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
+	return namesgenerator.GetRandomName(1)
 }
