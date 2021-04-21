@@ -155,6 +155,9 @@ func Start(c *Config) (*MySQLBox, error) {
 		ExposedPorts: map[nat.Port]struct{}{
 			"3306/tcp": {},
 		},
+		Labels: map[string]string{
+			"com.github.virgild.testutils.mysqlbox": "1",
+		},
 	}
 
 	portBinding := nat.PortBinding{
