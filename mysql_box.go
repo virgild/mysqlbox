@@ -334,7 +334,7 @@ func (b *MySQLBox) CleanAllTables() {
 }
 
 // CleanTables truncates the specified tables in the Database.
-func (b*MySQLBox) CleanTables(tables ...string) {
+func (b *MySQLBox) CleanTables(tables ...string) {
 	for _, table := range tables {
 		query := fmt.Sprintf("TRUNCATE TABLE `%s`", table)
 		_, err := b.db.Exec(query)
