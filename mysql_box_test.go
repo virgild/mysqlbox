@@ -1,4 +1,4 @@
-package mysqlbox
+package mysqlbox_test
 
 import (
 	"fmt"
@@ -6,11 +6,13 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/virgild/testutils/mysqlbox"
 )
 
 func ExampleStart() {
 	// Start the MySQL server container
-	b, err := Start(&Config{})
+	b, err := mysqlbox.Start(&mysqlbox.Config{})
 	if err != nil {
 		log.Printf("MySQLBox failed to start: %s\n", err.Error())
 		return
@@ -31,7 +33,7 @@ func ExampleStart() {
 }
 
 func TestMySQLBoxDefaultConfig(t *testing.T) {
-	b, err := Start(&Config{})
+	b, err := mysqlbox.Start(&mysqlbox.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +75,7 @@ func TestMySQLBoxDefaultConfig(t *testing.T) {
 }
 
 func TestPanicRecoverCleanup(t *testing.T) {
-	b, err := Start(&Config{})
+	b, err := mysqlbox.Start(&mysqlbox.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,8 +101,8 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 			schemaFile.Close()
 		}()
 
-		b, err := Start(&Config{
-			InitialSQL: DataFromReader(schemaFile),
+		b, err := mysqlbox.Start(&mysqlbox.Config{
+			InitialSQL: mysqlbox.DataFromReader(schemaFile),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -135,8 +137,8 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 			DEFAULT CHARSET = utf8mb4;
 		`)
 
-		b, err := Start(&Config{
-			InitialSQL: DataFromBuffer(sql),
+		b, err := mysqlbox.Start(&mysqlbox.Config{
+			InitialSQL: mysqlbox.DataFromBuffer(sql),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -165,8 +167,8 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 			schemaFile.Close()
 		}()
 
-		b, err := Start(&Config{
-			InitialSQL: DataFromReader(schemaFile),
+		b, err := mysqlbox.Start(&mysqlbox.Config{
+			InitialSQL: mysqlbox.DataFromReader(schemaFile),
 		})
 		if err == nil {
 			t.Error("mysql box should not start")
@@ -188,8 +190,8 @@ func TestCleanTables(t *testing.T) {
 			schemaFile.Close()
 		}()
 
-		b, err := Start(&Config{
-			InitialSQL: DataFromReader(schemaFile),
+		b, err := mysqlbox.Start(&mysqlbox.Config{
+			InitialSQL: mysqlbox.DataFromReader(schemaFile),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -279,8 +281,8 @@ func TestCleanTables(t *testing.T) {
 			schemaFile.Close()
 		}()
 
-		b, err := Start(&Config{
-			InitialSQL:       DataFromReader(schemaFile),
+		b, err := mysqlbox.Start(&mysqlbox.Config{
+			InitialSQL:       mysqlbox.DataFromReader(schemaFile),
 			DoNotCleanTables: []string{"categories"},
 		})
 		if err != nil {
@@ -371,8 +373,8 @@ func TestCleanTables(t *testing.T) {
 			schemaFile.Close()
 		}()
 
-		b, err := Start(&Config{
-			InitialSQL:       DataFromReader(schemaFile),
+		b, err := mysqlbox.Start(&mysqlbox.Config{
+			InitialSQL:       mysqlbox.DataFromReader(schemaFile),
 			DoNotCleanTables: []string{"categories"},
 		})
 		if err != nil {

@@ -24,7 +24,7 @@ import (
 
 // Config contains MySQLBox settings.
 type Config struct {
-	// ContainerName specifies the MySQL container name. If blank, it will be generated as "mysql-test-<random id>".
+	// ContainerName specifies the MySQL container name. If blank, it will be generated as "mysqlbox-<random id>".
 	ContainerName string
 
 	// Image specifies what Docker image to use. If blank, it defaults to "mysql:8".
