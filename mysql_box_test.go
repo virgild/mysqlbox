@@ -47,14 +47,21 @@ func TestMySQLBoxNilError(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("must_url", func(t *testing.T) {
+		require.Panics(t, func() {
+			b.MustURL()
+		})
+	})
+
 	t.Run("db", func(t *testing.T) {
 		_, err := b.DB()
 		require.Error(t, err)
 	})
 
-	t.Run("dbx", func(t *testing.T) {
-		_, err := b.DBx()
-		require.Error(t, err)
+	t.Run("must_db", func(t *testing.T) {
+		require.Panics(t, func() {
+			b.MustDB()
+		})
 	})
 
 	t.Run("stop", func(t *testing.T) {
@@ -62,9 +69,21 @@ func TestMySQLBoxNilError(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("must_stop", func(t *testing.T) {
+		require.Panics(t, func() {
+			b.MustStop()
+		})
+	})
+
 	t.Run("container_name", func(t *testing.T) {
 		_, err := b.ContainerName()
 		require.Error(t, err)
+	})
+
+	t.Run("must_container_name", func(t *testing.T) {
+		require.Panics(t, func() {
+			b.MustContainerName()
+		})
 	})
 
 	t.Run("clean_tables", func(t *testing.T) {
@@ -72,9 +91,21 @@ func TestMySQLBoxNilError(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("must_clean_tables", func(t *testing.T) {
+		require.Panics(t, func() {
+			b.MustCleanTables("testing")
+		})
+	})
+
 	t.Run("clean_all_tables", func(t *testing.T) {
 		err := b.CleanAllTables()
 		require.Error(t, err)
+	})
+
+	t.Run("must_clean_all_tables", func(t *testing.T) {
+		require.Panics(t, func() {
+			b.MustCleanAllTables()
+		})
 	})
 }
 
@@ -91,21 +122,32 @@ func TestMySQLBoxDefaultConfig(t *testing.T) {
 		}
 	})
 
-	dbx, err := b.DBx()
-	require.NoError(t, err)
-	require.NotNil(t, dbx)
-
 	db, err := b.DB()
 	require.NoError(t, err)
 	require.NotNil(t, db)
+
+	require.NotPanics(t, func() {
+		db = b.MustDB()
+		require.NotNil(t, db)
+	})
 
 	dburl, err := b.URL()
 	require.NoError(t, err)
 	require.NotEmpty(t, dburl)
 
+	require.NotPanics(t, func() {
+		dburl = b.MustURL()
+		require.NotEmpty(t, dburl)
+	})
+
 	containerName, err := b.ContainerName()
 	require.NoError(t, err)
 	require.NotEmpty(t, containerName)
+
+	require.NotPanics(t, func() {
+		containerName = b.MustContainerName()
+		require.NotEmpty(t, containerName)
+	})
 
 	row := db.QueryRow("SELECT NOW()")
 	var now time.Time

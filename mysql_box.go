@@ -18,7 +18,6 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
 )
 
 // Config contains MySQLBox settings.
@@ -69,7 +68,7 @@ func (c *Config) LoadDefaults() {
 type MySQLBox struct {
 	url           string
 	databaseName  string
-	db            *sqlx.DB
+	db            *sql.DB
 	containerName string
 	stopFunc      func() error
 	// logBuf is where the mysql logs are stored (these are logs coming from the library and are not the server logs)
@@ -234,7 +233,7 @@ func Start(c *Config) (*MySQLBox, error) {
 
 	// Connect to db
 	url := fmt.Sprintf("root:%s@tcp(127.0.0.1:%d)/%s?parseTime=true", c.RootPassword, port, c.Database)
-	db, err := sqlx.Open("mysql", url)
+	db, err := sql.Open("mysql", url)
 	if err != nil {
 		return nil, err
 	}
@@ -281,12 +280,11 @@ func (b *MySQLBox) Stop() error {
 	return b.stopFunc()
 }
 
-// DBx returns an sqlx.DB connected to the running MySQL server.
-func (b *MySQLBox) DBx() (*sqlx.DB, error) {
-	if b == nil {
-		return nil, errors.New("mysqlbox is nil")
+func (b *MySQLBox) MustStop() {
+	err := b.Stop()
+	if err != nil {
+		panic(err)
 	}
-	return b.db, nil
 }
 
 // DB returns an sql.DB connected to the running MySQL server.
@@ -295,7 +293,16 @@ func (b *MySQLBox) DB() (*sql.DB, error) {
 		return nil, errors.New("mysqlbox is nil")
 	}
 
-	return b.db.DB, nil
+	return b.db, nil
+}
+
+func (b *MySQLBox) MustDB() *sql.DB {
+	db, err := b.DB()
+	if err != nil {
+		panic(err)
+	}
+
+	return db
 }
 
 // URL returns the MySQL database URL that can be used to connect to the MySQL service.
@@ -307,6 +314,15 @@ func (b *MySQLBox) URL() (string, error) {
 	return b.url, nil
 }
 
+func (b *MySQLBox) MustURL() string {
+	dburl, err := b.URL()
+	if err != nil {
+		panic(err)
+	}
+
+	return dburl
+}
+
 // ContainerName returns the name of the created container.
 func (b *MySQLBox) ContainerName() (string, error) {
 	if b == nil {
@@ -316,6 +332,15 @@ func (b *MySQLBox) ContainerName() (string, error) {
 	return b.containerName, nil
 }
 
+func (b *MySQLBox) MustContainerName() string {
+	name, err := b.ContainerName()
+	if err != nil {
+		panic(err)
+	}
+
+	return name
+}
+
 // CleanAllTables truncates all tables in the Database, except those provided in Config.DoNotCleanTables.
 func (b *MySQLBox) CleanAllTables() error {
 	if b == nil {
@@ -323,7 +348,7 @@ func (b *MySQLBox) CleanAllTables() error {
 	}
 
 	query := "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"
-	rows, err := b.db.Queryx(query, b.databaseName)
+	rows, err := b.db.Query(query, b.databaseName)
 	if err != nil {
 		panic(err)
 	}
@@ -357,6 +382,13 @@ func (b *MySQLBox) CleanAllTables() error {
 	return nil
 }
 
+func (b *MySQLBox) MustCleanAllTables() {
+	err := b.CleanAllTables()
+	if err != nil {
+		panic(err)
+	}
+}
+
 // CleanTables truncates the specified tables in the Database.
 func (b *MySQLBox) CleanTables(tables ...string) error {
 	if b == nil {
@@ -372,4 +404,11 @@ func (b *MySQLBox) CleanTables(tables ...string) error {
 	}
 
 	return nil
+}
+
+func (b *MySQLBox) MustCleanTables(tables ...string) {
+	err := b.CleanTables(tables...)
+	if err != nil {
+		panic(err)
+	}
 }
