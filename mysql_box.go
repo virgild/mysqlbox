@@ -194,7 +194,7 @@ func Start(c *Config) (*MySQLBox, error) {
 		return nil, err
 	}
 
-	// Create container stopper function
+	// Container stopper function
 	stopFunc := func() error {
 		timeout := time.Second * 60
 		err := cli.ContainerStop(context.Background(), created.ID, &timeout)
@@ -238,7 +238,7 @@ func Start(c *Config) (*MySQLBox, error) {
 		return nil, err
 	}
 
-	// Ping DB n times
+	// Ping DB for 30 seconds until it connects.
 	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 	for {
 		err := db.PingContext(ctx)
@@ -280,6 +280,7 @@ func (b *MySQLBox) Stop() error {
 	return b.stopFunc()
 }
 
+// MustStop stops the MySQL container.
 func (b *MySQLBox) MustStop() {
 	err := b.Stop()
 	if err != nil {
@@ -296,6 +297,7 @@ func (b *MySQLBox) DB() (*sql.DB, error) {
 	return b.db, nil
 }
 
+// MustDB returns an sql.DB conencted to the running MySQL server.
 func (b *MySQLBox) MustDB() *sql.DB {
 	db, err := b.DB()
 	if err != nil {
@@ -314,6 +316,7 @@ func (b *MySQLBox) URL() (string, error) {
 	return b.url, nil
 }
 
+// MustURL returns the MySQL database URL that can be used to connect to the MySQL service.
 func (b *MySQLBox) MustURL() string {
 	dburl, err := b.URL()
 	if err != nil {
@@ -332,6 +335,7 @@ func (b *MySQLBox) ContainerName() (string, error) {
 	return b.containerName, nil
 }
 
+// MustContainerName returns the name of the created container.
 func (b *MySQLBox) MustContainerName() string {
 	name, err := b.ContainerName()
 	if err != nil {
@@ -382,6 +386,7 @@ func (b *MySQLBox) CleanAllTables() error {
 	return nil
 }
 
+// MustCleanAllTables truncates all tables in the Database, except those provided in Config.DoNotCleanTables.
 func (b *MySQLBox) MustCleanAllTables() {
 	err := b.CleanAllTables()
 	if err != nil {
@@ -406,6 +411,7 @@ func (b *MySQLBox) CleanTables(tables ...string) error {
 	return nil
 }
 
+// MustCleanTables truncates the specified tables in the Database.
 func (b *MySQLBox) MustCleanTables(tables ...string) {
 	err := b.CleanTables(tables...)
 	if err != nil {
