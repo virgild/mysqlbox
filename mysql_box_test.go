@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/virgild/testutils/mysqlbox"
 )
 
@@ -19,7 +21,12 @@ func ExampleStart() {
 	}
 
 	// Query the database
-	_, err = b.DB().Query("SELECT * FROM users LIMIT 5")
+	db, err := b.DB()
+	if err != nil {
+		log.Printf("db error: %s\n", err.Error())
+		return
+	}
+	_, err = db.Query("SELECT * FROM users LIMIT 5")
 	if err != nil {
 		log.Printf("select failed: %s\n", err.Error())
 		return
@@ -30,6 +37,45 @@ func ExampleStart() {
 	if err != nil {
 		log.Printf("stop container failed: %s\n", err.Error())
 	}
+}
+
+func TestMySQLBoxNilError(t *testing.T) {
+	var b *mysqlbox.MySQLBox
+
+	t.Run("url", func(t *testing.T) {
+		_, err := b.URL()
+		require.Error(t, err)
+	})
+
+	t.Run("db", func(t *testing.T) {
+		_, err := b.DB()
+		require.Error(t, err)
+	})
+
+	t.Run("dbx", func(t *testing.T) {
+		_, err := b.DBx()
+		require.Error(t, err)
+	})
+
+	t.Run("stop", func(t *testing.T) {
+		err := b.Stop()
+		require.Error(t, err)
+	})
+
+	t.Run("container_name", func(t *testing.T) {
+		_, err := b.ContainerName()
+		require.Error(t, err)
+	})
+
+	t.Run("clean_tables", func(t *testing.T) {
+		err := b.CleanTables("testing")
+		require.Error(t, err)
+	})
+
+	t.Run("clean_all_tables", func(t *testing.T) {
+		err := b.CleanAllTables()
+		require.Error(t, err)
+	})
 }
 
 func TestMySQLBoxDefaultConfig(t *testing.T) {
@@ -45,23 +91,23 @@ func TestMySQLBoxDefaultConfig(t *testing.T) {
 		}
 	})
 
-	if b.DBx() == nil {
-		t.Error("DBx() returns nil")
-	}
+	dbx, err := b.DBx()
+	require.NoError(t, err)
+	require.NotNil(t, dbx)
 
-	if b.DB() == nil {
-		t.Error("DB() returns nil")
-	}
+	db, err := b.DB()
+	require.NoError(t, err)
+	require.NotNil(t, db)
 
-	if b.URL() == "" {
-		t.Error("URL() returns blank string")
-	}
+	dburl, err := b.URL()
+	require.NoError(t, err)
+	require.NotEmpty(t, dburl)
 
-	if b.ContainerName() == "" {
-		t.Error("ContainerName() returns blank string")
-	}
+	containerName, err := b.ContainerName()
+	require.NoError(t, err)
+	require.NotEmpty(t, containerName)
 
-	row := b.DB().QueryRow("SELECT NOW()")
+	row := db.QueryRow("SELECT NOW()")
 	var now time.Time
 	err = row.Scan(&now)
 	if err != nil {
@@ -71,7 +117,6 @@ func TestMySQLBoxDefaultConfig(t *testing.T) {
 	if now.IsZero() {
 		t.Error("time is zero")
 	}
-
 }
 
 func TestPanicRecoverCleanup(t *testing.T) {
@@ -114,9 +159,12 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 			}
 		})
 
+		db, err := b.DB()
+		require.NoError(t, err)
+
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
 		now := time.Now()
-		_, err = b.DB().Exec(query, "U-TEST1", "user1@example.com", now, now)
+		_, err = db.Exec(query, "U-TEST1", "user1@example.com", now, now)
 		if err != nil {
 			t.Error(err)
 		}
@@ -150,9 +198,12 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 			}
 		})
 
+		db, err := b.DB()
+		require.NoError(t, err)
+
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
 		now := time.Now()
-		_, err = b.DB().Exec(query, "U-TEST1", "user1@example.com", now, now)
+		_, err = db.Exec(query, "U-TEST1", "user1@example.com", now, now)
 		if err != nil {
 			t.Error(err)
 		}
@@ -203,9 +254,12 @@ func TestCleanTables(t *testing.T) {
 			}
 		})
 
+		db, err := b.DB()
+		require.NoError(t, err)
+
 		// Insert rows
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
-		stmt, err := b.DB().Prepare(query)
+		stmt, err := db.Prepare(query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -213,19 +267,14 @@ func TestCleanTables(t *testing.T) {
 		now := time.Now()
 		for n := 0; n < 10; n++ {
 			_, err := stmt.Exec(fmt.Sprintf("U-TEST%d", n), fmt.Sprintf("user%d@example.com", n), now, now)
-			if err != nil {
-				t.Error(err)
-				t.FailNow()
-			}
+			require.NoError(t, err)
 		}
 
 		// Check inserted rows
 		var count uint
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row := db.QueryRow("SELECT COUNT(*) FROM users")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 10 {
 			t.Error("select count does not match")
@@ -233,11 +282,9 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Check other rows from the initial schema
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM categories")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 5 {
 			t.Error("select count does not match")
@@ -245,14 +292,13 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Clean all tables
-		b.CleanAllTables()
+		err = b.CleanAllTables()
+		require.NoError(t, err)
 
 		// Check inserted rows
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM users")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 0 {
 			t.Error("select count does not match")
@@ -260,11 +306,9 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Check rows fom initial schema
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM categories")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 0 {
 			t.Error("select count does not match")
@@ -295,9 +339,12 @@ func TestCleanTables(t *testing.T) {
 			}
 		})
 
+		db, err := b.DB()
+		require.NoError(t, err)
+
 		// Insert rows
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
-		stmt, err := b.DB().Prepare(query)
+		stmt, err := db.Prepare(query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -313,11 +360,9 @@ func TestCleanTables(t *testing.T) {
 
 		// Check inserted rows
 		var count uint
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row := db.QueryRow("SELECT COUNT(*) FROM users")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 10 {
 			t.Error("select count does not match")
@@ -325,11 +370,9 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Check other rows from the initial schema
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM categories")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 5 {
 			t.Error("select count does not match")
@@ -337,14 +380,13 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Clean all tables
-		b.CleanAllTables()
+		err = b.CleanAllTables()
+		require.NoError(t, err)
 
 		// Check inserted rows
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM users")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 0 {
 			t.Error("select count does not match")
@@ -352,11 +394,9 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Check rows fom initial schema
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM categories")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 5 {
 			t.Error("select count does not match")
@@ -387,9 +427,12 @@ func TestCleanTables(t *testing.T) {
 			}
 		})
 
+		db, err := b.DB()
+		require.NoError(t, err)
+
 		// Insert rows
 		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
-		stmt, err := b.DB().Prepare(query)
+		stmt, err := db.Prepare(query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -405,11 +448,9 @@ func TestCleanTables(t *testing.T) {
 
 		// Check inserted rows
 		var count uint
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row := db.QueryRow("SELECT COUNT(*) FROM users")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 10 {
 			t.Error("select count does not match")
@@ -417,11 +458,9 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Check other rows from the initial schema
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM categories")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 5 {
 			t.Error("select count does not match")
@@ -429,14 +468,13 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Clean tables
-		b.CleanTables("categories", "non_existent")
+		err = b.CleanTables("categories", "non_existent")
+		require.NoError(t, err)
 
 		// Check users table
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM users")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM users")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 10 {
 			t.Error("select count does not match")
@@ -444,11 +482,9 @@ func TestCleanTables(t *testing.T) {
 		}
 
 		// Check categories table
-		err = b.DBx().Get(&count, "SELECT COUNT(*) FROM categories")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
+		row = db.QueryRow("SELECT COUNT(*) FROM categories")
+		err = row.Scan(&count)
+		require.NoError(t, err)
 
 		if count != 0 {
 			t.Error("select count does not match")

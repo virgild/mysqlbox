@@ -270,6 +270,10 @@ func Start(c *Config) (*MySQLBox, error) {
 
 // Stop stops the MySQL container.
 func (b *MySQLBox) Stop() error {
+	if b == nil {
+		return errors.New("mysqlbox is nil")
+	}
+
 	if b.stopFunc == nil {
 		return errors.New("mysqlbox has no stop func")
 	}
@@ -278,27 +282,46 @@ func (b *MySQLBox) Stop() error {
 }
 
 // DBx returns an sqlx.DB connected to the running MySQL server.
-func (b *MySQLBox) DBx() *sqlx.DB {
-	return b.db
+func (b *MySQLBox) DBx() (*sqlx.DB, error) {
+	if b == nil {
+		return nil, errors.New("mysqlbox is nil")
+	}
+	return b.db, nil
 }
 
 // DB returns an sql.DB connected to the running MySQL server.
-func (b *MySQLBox) DB() *sql.DB {
-	return b.db.DB
+func (b *MySQLBox) DB() (*sql.DB, error) {
+	if b == nil {
+		return nil, errors.New("mysqlbox is nil")
+	}
+
+	return b.db.DB, nil
 }
 
-// URL returns the MySQL database URL that can be used to connect tohe MySQL service.
-func (b *MySQLBox) URL() string {
-	return b.url
+// URL returns the MySQL database URL that can be used to connect to the MySQL service.
+func (b *MySQLBox) URL() (string, error) {
+	if b == nil {
+		return "", errors.New("mysqlbox is nil")
+	}
+
+	return b.url, nil
 }
 
 // ContainerName returns the name of the created container.
-func (b *MySQLBox) ContainerName() string {
-	return b.containerName
+func (b *MySQLBox) ContainerName() (string, error) {
+	if b == nil {
+		return "", errors.New("mysqlbox is nil")
+	}
+
+	return b.containerName, nil
 }
 
 // CleanAllTables truncates all tables in the Database, except those provided in Config.DoNotCleanTables.
-func (b *MySQLBox) CleanAllTables() {
+func (b *MySQLBox) CleanAllTables() error {
+	if b == nil {
+		return errors.New("mysqlbox is nil")
+	}
+
 	query := "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"
 	rows, err := b.db.Queryx(query, b.databaseName)
 	if err != nil {
@@ -330,10 +353,16 @@ func (b *MySQLBox) CleanAllTables() {
 			panic(err)
 		}
 	}
+
+	return nil
 }
 
 // CleanTables truncates the specified tables in the Database.
-func (b *MySQLBox) CleanTables(tables ...string) {
+func (b *MySQLBox) CleanTables(tables ...string) error {
+	if b == nil {
+		return errors.New("mysqlbox is nil")
+	}
+
 	for _, table := range tables {
 		query := fmt.Sprintf("TRUNCATE TABLE `%s`", table)
 		_, err := b.db.Exec(query)
@@ -341,4 +370,6 @@ func (b *MySQLBox) CleanTables(tables ...string) {
 			fmt.Fprintf(os.Stderr, "truncate table failed (%s): %s\n", table, err.Error())
 		}
 	}
+
+	return nil
 }
