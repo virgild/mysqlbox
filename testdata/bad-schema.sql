@@ -1,0 +1,1 @@
+INSERT INTO non_existent_table VALUES (1, 2, 3);

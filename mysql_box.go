@@ -65,6 +65,7 @@ func (c *Config) LoadDefaults() {
 	}
 }
 
+// MySQLBox is an interface to a MySQL server running in a Docker container.
 type MySQLBox struct {
 	url           string
 	databaseName  string
@@ -78,7 +79,7 @@ type MySQLBox struct {
 	doNotCleanTables []string
 }
 
-// Start creates a Docker container that will run a MySQL server. The passed Config object contains settings
+// Start creates a Docker container that runs an instance of MySQL server. The passed Config object contains settings
 // for the container, the MySQL service, and initial data. To stop the created container, call the function returned
 // by StopFunc.
 func Start(c *Config) (*MySQLBox, error) {
@@ -154,7 +155,7 @@ func Start(c *Config) (*MySQLBox, error) {
 			"3306/tcp": {},
 		},
 		Labels: map[string]string{
-			"com.github.virgild.testutils.mysqlbox": "1",
+			"com.github.virgild.mysqlbox": "1",
 		},
 	}
 

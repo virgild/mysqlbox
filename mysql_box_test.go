@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/virgild/testutils/mysqlbox"
+	"github.com/virgild/mysqlbox"
 )
 
 func ExampleStart() {
@@ -180,7 +180,7 @@ func TestPanicRecoverCleanup(t *testing.T) {
 
 func TestMySQLBoxWithInitialSchema(t *testing.T) {
 	t.Run("with file", func(t *testing.T) {
-		schemaFile, err := os.Open("../testdata/schema.sql")
+		schemaFile, err := os.Open("./testdata/schema.sql")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,7 +252,7 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 	})
 
 	t.Run("with bad schema", func(t *testing.T) {
-		schemaFile, err := os.Open("../testdata/bad-schema.sql")
+		schemaFile, err := os.Open("./testdata/bad-schema.sql")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -275,7 +275,7 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 
 func TestCleanTables(t *testing.T) {
 	t.Run("with no protected tables", func(t *testing.T) {
-		schemaFile, err := os.Open("../testdata/schema.sql")
+		schemaFile, err := os.Open("./testdata/schema.sql")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -359,7 +359,7 @@ func TestCleanTables(t *testing.T) {
 	})
 
 	t.Run("with protected tables", func(t *testing.T) {
-		schemaFile, err := os.Open("../testdata/schema.sql")
+		schemaFile, err := os.Open("./testdata/schema.sql")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -447,7 +447,7 @@ func TestCleanTables(t *testing.T) {
 	})
 
 	t.Run("specific tables", func(t *testing.T) {
-		schemaFile, err := os.Open("../testdata/schema.sql")
+		schemaFile, err := os.Open("./testdata/schema.sql")
 		if err != nil {
 			t.Fatal(err)
 		}
