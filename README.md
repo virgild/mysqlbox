@@ -1,6 +1,6 @@
 # mysqlbox
 
-![MySQLBox logo](https://github.com/virgild/blob/main/static/logo.png?raw=true)
+![MySQLBox logo](https://github.com/virgild/mysqlbox/blob/main/static/logo.png?raw=true)
 
 **mysqlbox** creates a ready to use MySQL server in a Docker container that can be
 used in Go tests. The `Start()` function returns a `MySQLBox` that has a container running MySQL server. 
