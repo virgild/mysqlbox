@@ -61,7 +61,7 @@ func (c *Config) LoadDefaults() {
 	}
 
 	if c.ContainerName == "" {
-		c.ContainerName = fmt.Sprintf("mysqlbox_%s", randomID())
+		c.ContainerName = fmt.Sprintf("mysqlbox-%s", randomID())
 	}
 }
 
