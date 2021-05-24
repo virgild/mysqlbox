@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"strconv"
 	"time"
@@ -67,7 +68,7 @@ func (c *Config) LoadDefaults() {
 
 // MySQLBox is an interface to a MySQL server running in a Docker container.
 type MySQLBox struct {
-	url           string
+	dsn           string
 	databaseName  string
 	db            *sql.DB
 	containerName string
@@ -233,8 +234,16 @@ func Start(c *Config) (*MySQLBox, error) {
 	}
 
 	// Connect to db
-	url := fmt.Sprintf("root:%s@tcp(127.0.0.1:%d)/%s?parseTime=true", c.RootPassword, port, c.Database)
-	db, err := sql.Open("mysql", url)
+	mysqlCfg := mysql.NewConfig()
+	mysqlCfg.Net = "tcp"
+	mysqlCfg.ParseTime = true
+	mysqlCfg.Addr = net.JoinHostPort("127.0.0.1", portStr)
+	mysqlCfg.DBName = c.Database
+	mysqlCfg.User = "root"
+	mysqlCfg.Passwd = c.RootPassword
+
+	dsn := mysqlCfg.FormatDSN()
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +265,7 @@ func Start(c *Config) (*MySQLBox, error) {
 
 	b := &MySQLBox{
 		db:               db,
-		url:              url,
+		dsn:              dsn,
 		stopFunc:         stopFunc,
 		port:             port,
 		logBuf:           logbuf,
@@ -308,23 +317,23 @@ func (b *MySQLBox) MustDB() *sql.DB {
 	return db
 }
 
-// URL returns the MySQL database URL that can be used to connect to the MySQL service.
-func (b *MySQLBox) URL() (string, error) {
+// DSN returns the MySQL database DSN that can be used to connect to the MySQL service.
+func (b *MySQLBox) DSN() (string, error) {
 	if b == nil {
 		return "", errors.New("mysqlbox is nil")
 	}
 
-	return b.url, nil
+	return b.dsn, nil
 }
 
-// MustURL returns the MySQL database URL that can be used to connect to the MySQL service.
-func (b *MySQLBox) MustURL() string {
-	dburl, err := b.URL()
+// MustDSN returns the MySQL database DSN that can be used to connect to the MySQL service.
+func (b *MySQLBox) MustDSN() string {
+	dsn, err := b.DSN()
 	if err != nil {
 		panic(err)
 	}
 
-	return dburl
+	return dsn
 }
 
 // ContainerName returns the name of the created container.

@@ -42,14 +42,14 @@ func ExampleStart() {
 func TestMySQLBoxNilError(t *testing.T) {
 	var b *mysqlbox.MySQLBox
 
-	t.Run("url", func(t *testing.T) {
-		_, err := b.URL()
+	t.Run("dsn", func(t *testing.T) {
+		_, err := b.DSN()
 		require.Error(t, err)
 	})
 
-	t.Run("must_url", func(t *testing.T) {
+	t.Run("must_dsn", func(t *testing.T) {
 		require.Panics(t, func() {
-			b.MustURL()
+			b.MustDSN()
 		})
 	})
 
@@ -131,13 +131,13 @@ func TestMySQLBoxDefaultConfig(t *testing.T) {
 		require.NotNil(t, db)
 	})
 
-	dburl, err := b.URL()
+	dsn, err := b.DSN()
 	require.NoError(t, err)
-	require.NotEmpty(t, dburl)
+	require.NotEmpty(t, dsn)
 
 	require.NotPanics(t, func() {
-		dburl = b.MustURL()
-		require.NotEmpty(t, dburl)
+		dsn = b.MustDSN()
+		require.NotEmpty(t, dsn)
 	})
 
 	containerName, err := b.ContainerName()
