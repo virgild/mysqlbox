@@ -179,7 +179,7 @@ func TestPanicRecoverCleanup(t *testing.T) {
 }
 
 func TestMySQLBoxWithInitialSchema(t *testing.T) {
-	t.Run("with file", func(t *testing.T) {
+	t.Run("with file reader", func(t *testing.T) {
 		schemaFile, err := os.Open("./testdata/schema.sql")
 		if err != nil {
 			t.Fatal(err)
@@ -190,6 +190,31 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 
 		b, err := mysqlbox.Start(&mysqlbox.Config{
 			InitialSQL: mysqlbox.DataFromReader(schemaFile),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			err := b.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+
+		db, err := b.DB()
+		require.NoError(t, err)
+
+		query := "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)"
+		now := time.Now()
+		_, err = db.Exec(query, "U-TEST1", "user1@example.com", now, now)
+		if err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("with file", func(t *testing.T) {
+		b, err := mysqlbox.Start(&mysqlbox.Config{
+			InitialSQL: mysqlbox.DataFromFile("./testdata/schema.sql"),
 		})
 		if err != nil {
 			t.Fatal(err)
