@@ -32,12 +32,8 @@ type Config struct {
 	// Database specifies the name of the database to create. If blank, it defaults to "testing".
 	Database string
 
-	// RootPassword specifies the password of the MySQL root user. If blank, the password is set to empty unless
-	// RandomRootPassword is true.
+	// RootPassword specifies the password of the MySQL root user.
 	RootPassword string
-
-	// RandomRootPassword sets the password of the MySQL root user to a random value.
-	RandomRootPassword bool
 
 	// MySQLPort specifies which port the MySQL server port (3306) will be bound to in the container.
 	MySQLPort int
@@ -135,9 +131,7 @@ func Start(c *Config) (*MySQLBox, error) {
 	// Load container env vars
 	envVars = append(envVars, fmt.Sprintf("MYSQL_DATABASE=%s", c.Database))
 
-	if c.RandomRootPassword {
-		envVars = append(envVars, "MYSQL_RANDOM_ROOT_PASSWORD=1")
-	} else if c.RootPassword == "" {
+	if c.RootPassword == "" {
 		envVars = append(envVars, "MYSQL_ALLOW_EMPTY_PASSWORD=1")
 	} else {
 		envVars = append(envVars, fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", c.RootPassword))
