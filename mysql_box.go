@@ -82,7 +82,7 @@ type MySQLBox struct {
 
 // Start creates a Docker container that runs an instance of MySQL server. The passed Config object contains settings
 // for the container, the MySQL service, and initial data. To stop the created container, call the function returned
-// by StopFunc.
+// by Stop().
 func Start(c *Config) (*MySQLBox, error) {
 	var envVars []string
 
