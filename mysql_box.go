@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 	"github.com/go-sql-driver/mysql"
 )
@@ -152,6 +153,8 @@ func Start(c *Config) (*MySQLBox, error) {
 		Labels: map[string]string{
 			"com.github.virgild.mysqlbox": "1",
 		},
+		AttachStderr: true,
+		AttachStdout: true,
 	}
 
 	portBinding := nat.PortBinding{
@@ -188,17 +191,6 @@ func Start(c *Config) (*MySQLBox, error) {
 	created, err := cli.ContainerCreate(ctx, cfg, hostCfg, nil, nil, c.ContainerName)
 	if err != nil {
 		return nil, err
-	}
-
-	// Container stopper function
-	stopFunc := func() error {
-		timeout := time.Second * 60
-		err := cli.ContainerStop(context.Background(), created.ID, &timeout)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	// Set mysql logger
@@ -260,7 +252,6 @@ func Start(c *Config) (*MySQLBox, error) {
 	b := &MySQLBox{
 		db:               db,
 		dsn:              dsn,
-		stopFunc:         stopFunc,
 		port:             port,
 		logBuf:           logbuf,
 		containerName:    c.ContainerName,
@@ -268,7 +259,76 @@ func Start(c *Config) (*MySQLBox, error) {
 		doNotCleanTables: c.DoNotCleanTables,
 	}
 
+	// Container stopper function
+	b.stopFunc = func() error {
+		b.writeLogs(cli, created.ID)
+
+		timeout := time.Second * 60
+		err := cli.ContainerStop(context.Background(), created.ID, &timeout)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	return b, nil
+}
+
+func (b *MySQLBox) writeLogs(cli *client.Client, containerID string) {
+	cout := bytes.NewBuffer(nil)
+	cerr := bytes.NewBuffer(nil)
+
+	containerLogs, err := cli.ContainerLogs(context.Background(), containerID, types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       "tail",
+	})
+	if err != nil {
+		fmt.Printf("error: %s\n", err.Error())
+		return
+	}
+
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second * 10):
+				containerLogs.Close()
+			}
+		}
+	}()
+
+	for {
+		_, err = stdcopy.StdCopy(cout, cerr, containerLogs)
+		if err != nil {
+			break
+		}
+	}
+
+	fmt.Printf("creating log file...\n")
+	f, err := os.OpenFile(fmt.Sprintf("container_%s.log", containerID), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("error: %s\n", err.Error())
+		return
+	}
+	defer f.Close()
+
+	f, err = os.OpenFile(fmt.Sprintf("container_%s_err.log", containerID), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("error: %s\n", err.Error())
+		return
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, cout)
+	if err != nil {
+		return
+	}
+
+	_, err = io.Copy(f, cerr)
+	if err != nil {
+		return
+	}
 }
 
 // Stop stops the MySQL container.
@@ -281,7 +341,12 @@ func (b *MySQLBox) Stop() error {
 		return errors.New("mysqlbox has no stop func")
 	}
 
-	return b.stopFunc()
+	err := b.stopFunc()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // MustStop stops the MySQL container.
