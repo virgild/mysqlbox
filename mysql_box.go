@@ -17,9 +17,12 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 	"github.com/go-sql-driver/mysql"
 )
+
+const containerStopTimeoutDur = time.Second * 60
 
 // Config contains MySQLBox settings.
 type Config struct {
@@ -45,6 +48,11 @@ type Config struct {
 	// DoNotCleanTables specifies a list of MySQL tables in Database that will not be cleaned when CleanAllTables()
 	// is called.
 	DoNotCleanTables []string
+
+	// Stdout is an optional writer where the container log stdout will be sent to.
+	Stdout io.Writer
+	// Stderr is an optional writer where the container log stderr will be sent to.
+	Stderr io.Writer
 }
 
 // LoadDefaults initializes some blank attributes of Config to default values.
@@ -64,13 +72,20 @@ func (c *Config) LoadDefaults() {
 
 // MySQLBox is an interface to a MySQL server running in a Docker container.
 type MySQLBox struct {
-	dsn           string
-	databaseName  string
-	db            *sql.DB
+	dsn          string
+	databaseName string
+	db           *sql.DB
+
+	cli           *client.Client
 	containerName string
-	stopFunc      func() error
-	// logBuf is where the mysql logs are stored (these are logs coming from the library and are not the server logs)
+	containerID   string
+	clogClose     chan bool
+
+	// logBuf is where the mysql logs are stored (these are logs coming from the client library and are not the server logs)
 	logBuf *bytes.Buffer
+	cout   io.Writer
+	cerr   io.Writer
+
 	// port is the assigned port to the container that maps to the mysqld port
 	port             int
 	doNotCleanTables []string
@@ -190,16 +205,8 @@ func Start(c *Config) (*MySQLBox, error) {
 		return nil, err
 	}
 
-	// Container stopper function
-	stopFunc := func() error {
-		timeout := time.Second * 60
-		err := cli.ContainerStop(context.Background(), created.ID, &timeout)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
+	// Create channel that will signal the container log reader to close
+	clogClose := make(chan bool, 1)
 
 	// Set mysql logger
 	_ = mysql.SetLogger(mylog)
@@ -207,8 +214,55 @@ func Start(c *Config) (*MySQLBox, error) {
 	// Start container
 	err = cli.ContainerStart(ctx, created.ID, types.ContainerStartOptions{})
 	if err != nil {
+		fmt.Printf("container start error: %s\n", err.Error())
 		return nil, err
 	}
+
+	// Get container logs
+	cout := c.Stdout
+	cerr := c.Stderr
+	go func() {
+		if cout == nil && cerr == nil {
+			return
+		}
+
+		if cout == nil {
+			cout = io.Discard
+		}
+
+		if cerr == nil {
+			cerr = io.Discard
+		}
+
+		// Get container log reader
+		clog, err := cli.ContainerLogs(context.Background(), created.ID, types.ContainerLogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Follow:     true,
+		})
+		if err != nil {
+			fmt.Printf("error: %s\n", err.Error())
+			return
+		}
+
+		// Run goroutine to close the container log reader when clogClose receives a signal:
+		go func() {
+			for range clogClose {
+				clog.Close()
+				return
+			}
+		}()
+
+		// Multiplex container logs to stdout and stderr.
+		// Receiving a signal in the clogClose channel will close the reader and exit this loop.
+		_, err = stdcopy.StdCopy(cout, cerr, clog)
+		if err != nil {
+			if err.Error() != "http: read on closed response body" {
+				fmt.Printf("error: %s\n", err.Error())
+			}
+			return
+		}
+	}()
 
 	// Get port binding
 	cr, err := cli.ContainerInspect(ctx, created.ID)
@@ -227,7 +281,7 @@ func Start(c *Config) (*MySQLBox, error) {
 		return nil, err
 	}
 
-	// Connect to db
+	// Connect to DB
 	mysqlCfg := mysql.NewConfig()
 	mysqlCfg.Net = "tcp"
 	mysqlCfg.ParseTime = true
@@ -252,6 +306,7 @@ func Start(c *Config) (*MySQLBox, error) {
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			cancel()
+			clogClose <- true
 			return nil, fmt.Errorf("could not connect to mysql")
 		}
 		time.Sleep(time.Millisecond * 500)
@@ -260,15 +315,43 @@ func Start(c *Config) (*MySQLBox, error) {
 	b := &MySQLBox{
 		db:               db,
 		dsn:              dsn,
-		stopFunc:         stopFunc,
 		port:             port,
 		logBuf:           logbuf,
+		cli:              cli,
+		containerID:      created.ID,
 		containerName:    c.ContainerName,
 		databaseName:     c.Database,
 		doNotCleanTables: c.DoNotCleanTables,
+		cout:             cout,
+		cerr:             cerr,
 	}
 
 	return b, nil
+}
+
+// MustStart is the same as Start() but panics instead of returning an error.
+func (b *MySQLBox) MustStart(c *Config) *MySQLBox {
+	box, err := Start(c)
+	if err != nil {
+		panic(err)
+	}
+
+	return box
+}
+
+func (b *MySQLBox) stopContainer() error {
+	// Send signal to clogClose when this function exits.
+	defer func() {
+		go func() { b.clogClose <- true }()
+	}()
+
+	timeout := containerStopTimeoutDur
+	err := b.cli.ContainerStop(context.Background(), b.containerID, &timeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Stop stops the MySQL container.
@@ -277,11 +360,7 @@ func (b *MySQLBox) Stop() error {
 		return errors.New("mysqlbox is nil")
 	}
 
-	if b.stopFunc == nil {
-		return errors.New("mysqlbox has no stop func")
-	}
-
-	return b.stopFunc()
+	return b.stopContainer()
 }
 
 // MustStop stops the MySQL container.

@@ -1,6 +1,7 @@
 package mysqlbox_test
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -40,6 +41,7 @@ func ExampleStart() {
 }
 
 func TestMySQLBoxNilError(t *testing.T) {
+	t.Parallel()
 	var b *mysqlbox.MySQLBox
 
 	t.Run("dsn", func(t *testing.T) {
@@ -275,27 +277,27 @@ func TestMySQLBoxWithInitialSchema(t *testing.T) {
 			t.Error(err)
 		}
 	})
+}
 
-	t.Run("with bad schema", func(t *testing.T) {
-		schemaFile, err := os.Open("./testdata/bad-schema.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() {
-			schemaFile.Close()
-		}()
+func TestStartBadSchema(t *testing.T) {
+	schemaFile, err := os.Open("./testdata/bad-schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		schemaFile.Close()
+	}()
 
-		b, err := mysqlbox.Start(&mysqlbox.Config{
-			InitialSQL: mysqlbox.DataFromReader(schemaFile),
-		})
-		if err == nil {
-			t.Error("mysql box should not start")
-		}
-
-		if b != nil {
-			t.Error("Start should not return a mysql box")
-		}
+	b, err := mysqlbox.Start(&mysqlbox.Config{
+		InitialSQL: mysqlbox.DataFromReader(schemaFile),
 	})
+	if err == nil {
+		t.Error("mysql box should not start")
+	}
+
+	if b != nil {
+		t.Error("Start should not return a mysql box")
+	}
 }
 
 func TestCleanTables(t *testing.T) {
@@ -559,3 +561,19 @@ func TestCleanTables(t *testing.T) {
 		}
 	})
 }
+
+func TestContainerLogs(t *testing.T) {
+	cout := bytes.NewBuffer(nil)
+	cerr := bytes.NewBuffer(nil)
+	box, err := mysqlbox.Start(&mysqlbox.Config{
+		Stdout: cout,
+		Stderr: cerr,
+	})
+	require.NoError(t, err)
+
+	err = box.Stop()
+	require.NoError(t, err)
+	require.NotEmpty(t, cout.Bytes())
+	require.NotEmpty(t, cerr.Bytes())
+}
+
