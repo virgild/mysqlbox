@@ -6,7 +6,7 @@ fmt:
 
 .PHONY: lint-deps
 lint-deps:
-	@GOMODULE111=off go install honnef.co/go/tools/cmd/staticcheck@latest
+	@go install honnef.co/go/tools/cmd/staticcheck@latest
 
 .PHONY: lint
 lint:
@@ -15,3 +15,10 @@ lint:
 .PHONY: test
 test:
 	@go test -p 1 -test.count 1 ./...
+
+.PHONY: gosec-deps
+gosec-deps:
+	@go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+gosec:
+	@gosec -quiet -exclude=G104 ./...
