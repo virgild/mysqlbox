@@ -577,3 +577,18 @@ func TestContainerLogs(t *testing.T) {
 	require.NotEmpty(t, cerr.Bytes())
 }
 
+func TestErrorLogs(t *testing.T) {
+	// Provide an invalid initial SQL script to trigger an error:
+	initialSQL := `
+		SELECT * FROM sales WHERE id = 1;
+	`
+	loggedErrors := []string{}
+
+	_, err := mysqlbox.Start(&mysqlbox.Config{
+		InitialSQL:   mysqlbox.DataFromBuffer([]byte(initialSQL)),
+		LoggedErrors: &loggedErrors,
+	})
+	require.Error(t, err)
+	require.Len(t, loggedErrors, 1)
+	require.Equal(t, "ERROR 1146 (42S02) at line 2: Table 'testing.sales' doesn't exist", loggedErrors[0])
+}
