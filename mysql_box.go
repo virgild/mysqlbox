@@ -84,6 +84,7 @@ type MySQLBox struct {
 	dsn          string
 	databaseName string
 	db           *sql.DB
+	rootPassword string
 
 	cli           *client.Client
 	containerName string
@@ -126,7 +127,7 @@ func Start(c *Config) (*MySQLBox, error) {
 		var err error
 		schemaFile, err = ioutil.TempFile(os.TempDir(), "schema-*.sql")
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error creating schema file: %w", err)
 		}
 
 		var src io.Reader
@@ -154,10 +155,12 @@ func Start(c *Config) (*MySQLBox, error) {
 	// Load container env vars
 	envVars = append(envVars, fmt.Sprintf("MYSQL_DATABASE=%s", c.Database))
 
+	var rootPassword string
 	if c.RootPassword == "" {
 		envVars = append(envVars, "MYSQL_ALLOW_EMPTY_PASSWORD=1")
 	} else {
 		envVars = append(envVars, fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", c.RootPassword))
+		rootPassword = c.RootPassword
 	}
 
 	// Container config
@@ -256,6 +259,7 @@ func Start(c *Config) (*MySQLBox, error) {
 	b := &MySQLBox{
 		db:               db,
 		dsn:              dsn,
+		rootPassword:     rootPassword,
 		port:             port,
 		logBuf:           logbuf,
 		cli:              cli,
@@ -480,7 +484,23 @@ func (b *MySQLBox) cleanupFiles() {
 	}
 }
 
-// connectDB returns a DB connection to the MySQL server.
+// DBAddr returns the container's MySQL address.
+func (b *MySQLBox) DBAddr() string {
+	addr := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", b.port))
+	return addr
+}
+
+// RootPassword returns the MySQL root user password.
+func (b *MySQLBox) RootPassword() string {
+	return b.rootPassword
+}
+
+// ConnectDB returns a DB connection and the DSN for the specified database.
+func (b *MySQLBox) ConnectDB(dbname string) (*sql.DB, string, error) {
+	return connectDB(b.port, dbname, b.rootPassword)
+}
+
+// connectDB returns a DB connection and the DSN to the MySQL server.
 func connectDB(port int, dbName string, rootPass string) (*sql.DB, string, error) {
 	mysqlCfg := mysql.NewConfig()
 	mysqlCfg.Net = "tcp"
@@ -580,6 +600,8 @@ func readContainerLogs(ctx context.Context,
 	containerExit <- true
 }
 
+// waitForDB periodically sends a DB ping to the MySQL server until (a) it is successful,
+// (b) the timeout is reached, or (c) a signal is received from the containerClosed channel.
 func (b *MySQLBox) waitForDB(timeout time.Duration, containerClosed <-chan bool) error {
 	if b == nil {
 		return errors.New("mysqlbox is nil")

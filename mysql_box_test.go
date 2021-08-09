@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -591,4 +592,58 @@ func TestErrorLogs(t *testing.T) {
 	require.Error(t, err)
 	require.Len(t, loggedErrors, 1)
 	require.Equal(t, "ERROR 1146 (42S02) at line 2: Table 'testing.sales' doesn't exist", loggedErrors[0])
+}
+
+func TestMultipleDatabases(t *testing.T) {
+	box, err := mysqlbox.Start(&mysqlbox.Config{
+		// multiple-db.sql creates two databases: db_one and db_two.
+		InitialSQL: mysqlbox.DataFromFile("./testdata/multiple-db.sql"),
+	})
+	require.NoError(t, err)
+	t.Cleanup(box.MustStop)
+
+	db1, dsn1, err := box.ConnectDB("db_one")
+	require.NoError(t, err)
+	require.NotEmpty(t, dsn1)
+
+	// db_one has a table called 'users'
+	_, err = db1.Query("SELECT * FROM users")
+	require.NoError(t, err)
+
+	db2, dsn2, err := box.ConnectDB("db_two")
+	require.NoError(t, err)
+	require.NotEmpty(t, dsn2)
+
+	// db_two has a table called 'products'
+	_, err = db2.Query("SELECT * FROM products")
+	require.NoError(t, err)
+
+	t.Run("connect_db_non_existent", func(t *testing.T) {
+		db3, dsn3, err := box.ConnectDB("db_three")
+		require.NoError(t, err)
+		require.NotEmpty(t, dsn3)
+
+		_, err = db3.Query("SELECT * FROM articles")
+		require.Error(t, err)
+	})
+}
+
+func TestDBProperties(t *testing.T) {
+	box, err := mysqlbox.Start(&mysqlbox.Config{
+		RootPassword: "root_pass",
+	})
+	require.NoError(t, err)
+	t.Cleanup(box.MustStop)
+
+	t.Run("db_addr", func(t *testing.T) {
+		require.NotEmpty(t, box.DBAddr())
+		host, port, err := net.SplitHostPort(box.DBAddr())
+		require.NoError(t, err)
+		require.Equal(t, "127.0.0.1", host)
+		require.NotEmpty(t, port)
+	})
+
+	t.Run("root_password", func(t *testing.T) {
+		require.Equal(t, "root_pass", box.RootPassword())
+	})
 }
