@@ -60,7 +60,7 @@ type Config struct {
 	// Stderr is an optional writer where the container log stderr will be sent to.
 	Stderr io.Writer
 
-	// LoggedErrors will contain a list of logged errors when the box fails to start.
+	// LoggedErrors is an optional list of strings that will contain error messages from the container stderr logs.
 	LoggedErrors *[]string
 }
 
@@ -88,7 +88,6 @@ type MySQLBox struct {
 	cli           *client.Client
 	containerName string
 	containerID   string
-	clogClose     chan bool
 	schemaFile    *os.File
 
 	// stoppedCh receives the signal when the container is stopped.
@@ -222,9 +221,6 @@ func Start(c *Config) (*MySQLBox, error) {
 		return nil, fmt.Errorf("error creating container: %w", err)
 	}
 
-	// Create channel that will signal the container log reader to close
-	clogClose := make(chan bool, 1)
-
 	// Create stopped channel
 	stoppedCh := make(chan bool, 1)
 
@@ -243,7 +239,7 @@ func Start(c *Config) (*MySQLBox, error) {
 	// Get container logs
 	cout := c.Stdout
 	cerr := c.Stderr
-	go readContainerLogs(ctx, cli, created.ID, cout, cerr, clogClose, c.LoggedErrors, containerClosed)
+	go readContainerLogs(ctx, cli, created.ID, cout, cerr, c.LoggedErrors, containerClosed)
 
 	// Get port binding
 	port, err := containerMySQLPort(ctx, cli, created.ID)
@@ -270,7 +266,6 @@ func Start(c *Config) (*MySQLBox, error) {
 		doNotCleanTables: c.DoNotCleanTables,
 		cout:             cout,
 		cerr:             cerr,
-		clogClose:        clogClose,
 		stoppedCh:        stoppedCh,
 	}
 
@@ -336,11 +331,6 @@ func (b *MySQLBox) MustStop() {
 }
 
 func (b *MySQLBox) stopContainer() error {
-	// Send signal to clogClose when this function exits.
-	defer func() {
-		go func() { b.clogClose <- true }()
-	}()
-
 	timeout := containerStopTimeoutDur
 	err := b.cli.ContainerStop(context.Background(), b.containerID, &timeout)
 	if err != nil {
@@ -481,13 +471,16 @@ func (b *MySQLBox) MustCleanTables(tables ...string) {
 	}
 }
 
+// cleanupFiles removes all temporary files created in the host space.
 func (b *MySQLBox) cleanupFiles() {
+	// Delete the schema file
 	if b.schemaFile != nil {
 		b.schemaFile.Close()
 		os.Remove(b.schemaFile.Name())
 	}
 }
 
+// connectDB returns a DB connection to the MySQL server.
 func connectDB(port int, dbName string, rootPass string) (*sql.DB, string, error) {
 	mysqlCfg := mysql.NewConfig()
 	mysqlCfg.Net = "tcp"
@@ -506,6 +499,7 @@ func connectDB(port int, dbName string, rootPass string) (*sql.DB, string, error
 	return db, dsn, nil
 }
 
+// containerMYSQLPort returns the MySQL port number of the running container.
 func containerMySQLPort(ctx context.Context, cli *client.Client, containerID string) (int, error) {
 	cr, err := cli.ContainerInspect(ctx, containerID)
 	if err != nil {
@@ -525,12 +519,14 @@ func containerMySQLPort(ctx context.Context, cli *client.Client, containerID str
 	return port, nil
 }
 
+// readContainerLogs starts reading a container log's two streams (stdout and stderr), and copies
+// them to the provider cout and cerr writers. While the stderr is being read, it also scanned
+// line by line. If a line starts with "ERROR", it is copied to the passed errors list.
 func readContainerLogs(ctx context.Context,
 	cli *client.Client,
 	containerID string,
 	cout io.Writer,
 	cerr io.Writer,
-	clogClose chan bool,
 	errors *[]string,
 	containerExit chan<- bool) {
 	if cout == nil {
@@ -550,14 +546,6 @@ func readContainerLogs(ctx context.Context,
 	if err != nil {
 		return
 	}
-
-	// Run goroutine to close the container log reader when clogClose receives a signal:
-	go func() {
-		for range clogClose {
-			clog.Close()
-			return
-		}
-	}()
 
 	pr, pw := io.Pipe()
 	mw := io.MultiWriter(cerr, pw)
