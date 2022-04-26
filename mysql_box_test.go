@@ -647,3 +647,23 @@ func TestDBProperties(t *testing.T) {
 		require.Equal(t, "root_pass", box.RootPassword())
 	})
 }
+
+func TestStartTimeout(t *testing.T) {
+	t.Run("trigger_timeout", func(t *testing.T) {
+		box, err := mysqlbox.Start(&mysqlbox.Config{
+			StartTimeout: time.Second * 5,
+			StopTimeout:  time.Second * 1,
+		})
+
+		t.Cleanup(box.MustStop)
+
+		t.Run("should_return_timeout_error", func(t *testing.T) {
+			require.Error(t, err)
+			require.ErrorIs(t, err, mysqlbox.ErrTimeout)
+		})
+
+		t.Run("should_return_box", func(t *testing.T) {
+			require.NotNil(t, box)
+		})
+	})
+}

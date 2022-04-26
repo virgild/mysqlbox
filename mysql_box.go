@@ -27,8 +27,13 @@ import (
 )
 
 const startTimeout = time.Second * 30
-const containerStopTimeoutDur = time.Second * 60
+const waitBetweenPings = time.Millisecond * 500
 const defaultMySQLImage = "mysql:8"
+
+var (
+	// ErrTimeout represents a timeout in an operation.
+	ErrTimeout = errors.New("operation timed out")
+)
 
 // Config contains MySQLBox settings.
 type Config struct {
@@ -62,6 +67,14 @@ type Config struct {
 
 	// LoggedErrors is an optional list of strings that will contain error messages from the container stderr logs.
 	LoggedErrors *[]string
+
+	// StartTimeout is the maximum time to wait for the container to start and MySQL ready to accept connections.
+	// The default is 30 seconds.
+	StartTimeout time.Duration
+
+	// StopTimeout is the amount of time to wait for the container to gracefully stop when Stop() is called.
+	// When the timeout is reached, the container is forcefully stopped.
+	StopTimeout time.Duration
 }
 
 // LoadDefaults initializes some blank attributes of Config to default values.
@@ -76,6 +89,10 @@ func (c *Config) LoadDefaults() {
 
 	if c.ContainerName == "" {
 		c.ContainerName = fmt.Sprintf("mysqlbox-%s", randomID())
+	}
+
+	if c.StartTimeout == 0 {
+		c.StartTimeout = startTimeout
 	}
 }
 
@@ -94,6 +111,8 @@ type MySQLBox struct {
 	// stoppedCh receives the signal when the container is stopped.
 	stoppedCh chan bool
 
+	containerStopTimeout time.Duration
+
 	// logBuf is where the mysql logs are stored (these are logs coming from the client library and are not the server logs)
 	logBuf *bytes.Buffer
 	cout   io.Writer
@@ -105,8 +124,10 @@ type MySQLBox struct {
 }
 
 // Start creates a Docker container that runs an instance of MySQL server. The passed Config object contains settings
-// for the container, the MySQL service, and initial data. To stop the created container, call the function returned
-// by Stop().
+// for the container, the MySQL service, and initial data. To stop the created container, call the Stop() method.
+// Start() returns an ErrTimeout if the container MySQL service cannot accept connections within the timeout period
+// (see Config.StartTimeout). When ErrTimeout is returned, the container is still running and an instance of MySQLBox
+// is returned along with the error.
 func Start(c *Config) (*MySQLBox, error) {
 	var envVars []string
 
@@ -257,24 +278,28 @@ func Start(c *Config) (*MySQLBox, error) {
 	}
 
 	b := &MySQLBox{
-		db:               db,
-		dsn:              dsn,
-		rootPassword:     rootPassword,
-		port:             port,
-		logBuf:           logbuf,
-		cli:              cli,
-		containerID:      created.ID,
-		containerName:    c.ContainerName,
-		schemaFile:       schemaFile,
-		databaseName:     c.Database,
-		doNotCleanTables: c.DoNotCleanTables,
-		cout:             cout,
-		cerr:             cerr,
-		stoppedCh:        stoppedCh,
+		db:                   db,
+		dsn:                  dsn,
+		rootPassword:         rootPassword,
+		port:                 port,
+		logBuf:               logbuf,
+		cli:                  cli,
+		containerID:          created.ID,
+		containerName:        c.ContainerName,
+		schemaFile:           schemaFile,
+		databaseName:         c.Database,
+		doNotCleanTables:     c.DoNotCleanTables,
+		cout:                 cout,
+		cerr:                 cerr,
+		stoppedCh:            stoppedCh,
+		containerStopTimeout: c.StopTimeout,
 	}
 
 	// Wait for db
-	err = b.waitForDB(startTimeout, containerClosed)
+	err = b.waitForDB(c.StartTimeout, containerClosed)
+	if errors.Is(err, ErrTimeout) {
+		return b, err
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -335,8 +360,11 @@ func (b *MySQLBox) MustStop() {
 }
 
 func (b *MySQLBox) stopContainer() error {
-	timeout := containerStopTimeoutDur
-	err := b.cli.ContainerStop(context.Background(), b.containerID, &timeout)
+	var timeout *time.Duration
+	if b.containerStopTimeout != 0 {
+		timeout = &b.containerStopTimeout
+	}
+	err := b.cli.ContainerStop(context.Background(), b.containerID, timeout)
 	if err != nil {
 		return err
 	}
@@ -607,22 +635,19 @@ func (b *MySQLBox) waitForDB(timeout time.Duration, containerClosed <-chan bool)
 		return errors.New("mysqlbox is nil")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	timer := time.NewTimer(timeout)
+
 	for {
-		err := b.db.PingContext(ctx)
+		err := b.db.Ping()
 		if err == nil {
-			cancel()
 			break
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			cancel()
-			return errors.New("could not connect to mysql")
-		}
-		time.Sleep(time.Millisecond * 500)
+		time.Sleep(waitBetweenPings)
 
 		select {
+		case <-timer.C:
+			return ErrTimeout
 		case <-containerClosed:
-			cancel()
 			return errors.New("container closed")
 		default:
 		}
