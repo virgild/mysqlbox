@@ -29,11 +29,11 @@ func DataFromBuffer(buf []byte) *Data {
 
 // DataFromFile can be used to load data from a file.
 func DataFromFile(filename string) *Data {
-	f, err := os.Open(filename)
+	f, err := os.Open(filename) // #nosec G304
 	if err != nil {
 		panic(fmt.Sprintf("error opening file %s: %s", filename, err.Error()))
 	}
-	defer f.Close()
+	defer f.Close() // #nosec G307
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, f)

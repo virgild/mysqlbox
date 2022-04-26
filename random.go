@@ -19,7 +19,7 @@ func randomID() string {
 func randStr(length int) string {
 	c := make([]rune, length)
 	for n := range c {
-		c[n] = charset[rand.Intn(charsetLen)]
+		c[n] = charset[rand.Intn(charsetLen)] // #nosec G404
 	}
 
 	return string(c)
