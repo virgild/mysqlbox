@@ -151,6 +151,12 @@ func Start(c *Config) (*MySQLBox, error) {
 			return nil, fmt.Errorf("error creating schema file: %w", err)
 		}
 
+		// Make the schema file readable by others
+		err = os.Chmod(schemaFile.Name(), 0644)
+		if err != nil {
+			return nil, fmt.Errorf("error setting schema file permissions: %w", err)
+		}
+
 		var src io.Reader
 
 		if c.InitialSQL.reader != nil {
