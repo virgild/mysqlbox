@@ -26,7 +26,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-const startTimeout = time.Second * 30
+const startTimeout = time.Second * 90
 const waitBetweenPings = time.Millisecond * 500
 const defaultMySQLImage = "mysql:8"
 
