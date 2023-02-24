@@ -248,7 +248,7 @@ func Start(c *Config) (*MySQLBox, error) {
 		created, createErr = cli.ContainerCreate(ctx, cfg, hostCfg, nil, nil, c.ContainerName)
 	}
 	if createErr != nil {
-		return nil, fmt.Errorf("error creating container: %w", err)
+		return nil, fmt.Errorf("error creating container: %w", createErr)
 	}
 
 	// Create stopped channel
