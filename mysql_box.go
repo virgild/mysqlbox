@@ -178,6 +178,7 @@ func Start(c *Config) (*MySQLBox, error) {
 	}
 
 	ctx := context.Background()
+	cli.NegotiateAPIVersion(ctx)
 
 	// Load container env vars
 	envVars = append(envVars, fmt.Sprintf("MYSQL_DATABASE=%s", c.Database))
@@ -366,11 +367,14 @@ func (b *MySQLBox) MustStop() {
 }
 
 func (b *MySQLBox) stopContainer() error {
-	var timeout *time.Duration
+	var timeout time.Duration
 	if b.containerStopTimeout != 0 {
-		timeout = &b.containerStopTimeout
+		timeout = b.containerStopTimeout
 	}
-	err := b.cli.ContainerStop(context.Background(), b.containerID, timeout)
+	timeoutSecs := int(timeout.Seconds())
+	err := b.cli.ContainerStop(context.Background(), b.containerID, container.StopOptions{
+		Timeout: &timeoutSecs,
+	})
 	if err != nil {
 		return err
 	}
