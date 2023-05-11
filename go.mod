@@ -3,7 +3,7 @@ module github.com/virgild/mysqlbox
 go 1.18
 
 require (
-	github.com/docker/docker v23.0.1+incompatible
+	github.com/docker/docker v23.0.3+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/stretchr/testify v1.8.1
